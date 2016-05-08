@@ -732,9 +732,9 @@ public class RangeBar extends View {
 
 		// Move the pressed thumb to the new x-position.
 		if (mLeftThumb.isPressed()) {
-			moveThumb(mLeftThumb, x);
+			moveThumb(true, x);
 		} else if (mRightThumb.isPressed()) {
-			moveThumb(mRightThumb, x);
+			moveThumb(false, x);
 		}
 
 		// If the thumbs have switched order, fix the references.
@@ -791,20 +791,35 @@ public class RangeBar extends View {
 	/**
 	 * Moves the thumb to the given x-coordinate.
 	 *
-	 * @param thumb
-	 * 		the thumb to move
+	 * @param leftThumb
+	 * 		which thumb to move? {@code true} for left, {@code false} for right
 	 * @param x
 	 * 		the x-coordinate to move the thumb to
 	 */
-	private void moveThumb(Thumb thumb, float x) {
+	private void moveThumb(boolean leftThumb, float x) {
 
-		// If the user has moved their finger outside the range of the bar,
-		// do not move the thumbs past the edge.
-		if (x < mBar.getLeftX() || x > mBar.getRightX()) {
-			// Do nothing.
+		Thumb thumb = leftThumb ? mLeftThumb : mRightThumb;
+
+		// avoid thumbs overlap - enforce minimum 1 tick distance between the thumbs
+		boolean isValidMove = true;
+		float tickDistance = mBar.getTickDistance();
+		if (leftThumb) {
+			isValidMove = x + tickDistance <= mRightThumb.getX();
 		} else {
+			isValidMove = x - tickDistance >= mLeftThumb.getX();
+		}
+
+		// moved outside the bar?
+		isValidMove = isValidMove && x > mBar.getLeftX() && x < mBar.getRightX();
+
+		if (isValidMove) {
 			thumb.setX(x);
 			invalidate();
+		} else {
+			// Do nothing.
+			// User OR has moved their finger outside the range of the bar,
+			// OR minimum one tick distance contract is interrupted.
+			// In both cases, do not move the thumbs.
 		}
 	}
 

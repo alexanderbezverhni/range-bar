@@ -157,4 +157,8 @@ class Bar {
 		// rounding discrepancies.
 		canvas.drawLine(mRightX, mTickStartY, mRightX, mTickEndY, mPaint);
 	}
+
+	public float getTickDistance() {
+		return mTickDistance;
+	}
 }
