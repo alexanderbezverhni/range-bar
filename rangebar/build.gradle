@@ -1,4 +1,7 @@
 apply plugin: 'com.android.library'
+apply plugin: 'com.github.dcendents.android-maven' // enables publishing on Jitpack.IO
+
+group='com.github.alexanderbezverhni' // enables publishing on Jitpack.IO
 
 android {
 
