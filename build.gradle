@@ -11,5 +11,5 @@ buildscript {
 
 task wrapper(type: Wrapper) {
     // See latest Gradle version: http://www.gradle.org/downloads
-    gradleVersion = '1.12'
+    gradleVersion = '2.13'
 }
