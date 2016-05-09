@@ -14,13 +14,16 @@
 package com.edmodo.rangebar;
 
 import android.content.Context;
+import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.util.AttributeSet;
+import android.util.DisplayMetrics;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -29,7 +32,7 @@ import android.view.View;
  * dragged to any position in the bar, the RangeBar only allows its thumbs to be dragged to discrete positions (denoted by tick marks) in the
  * bar. When released, a RangeBar thumb will snap to the nearest tick mark.
  * <p/>
- * Clients of the RangeBar can attach a {@link RangeBar#OnRangeBarChangeListener} to be notified when the thumbs have been moved.
+ * Clients of the RangeBar can attach a {@link OnRangeBarChangeListener} to be notified when the thumbs have been moved.
  */
 public class RangeBar extends View {
 
@@ -45,6 +48,10 @@ public class RangeBar extends View {
 	private static final float DEFAULT_CONNECTING_LINE_WEIGHT_PX = 4;
 	private static final int DEFAULT_THUMB_IMAGE_NORMAL = R.drawable.seek_thumb_normal;
 	private static final int DEFAULT_THUMB_IMAGE_PRESSED = R.drawable.seek_thumb_pressed;
+	private static final boolean DEFAULT_TITLES_BELOW_BAR = true;
+	private static final int DEFAULT_TITLES_MARGIN_PX = 30;
+	private static final int DEFAULT_TITLES_TEXT_SIZE_PX = 40;
+	private static final int DEFAULT_TITLES_TEXT_COLOR = Color.LTGRAY;
 
 	// Corresponds to android.R.color.holo_blue_light.
 	private static final int DEFAULT_CONNECTING_LINE_COLOR = 0xff33b5e5;
@@ -68,6 +75,12 @@ public class RangeBar extends View {
 	private int mThumbColorNormal = DEFAULT_THUMB_COLOR_NORMAL;
 	private int mThumbColorPressed = DEFAULT_THUMB_COLOR_PRESSED;
 
+	private boolean mTitlesBelowBar = DEFAULT_TITLES_BELOW_BAR;
+	private int mTitlesMarginPx = DEFAULT_TITLES_MARGIN_PX;
+	private int mTitlesTextSizePx = DEFAULT_TITLES_TEXT_SIZE_PX;
+	private int mTitlesTextColorSelected = DEFAULT_TITLES_TEXT_COLOR;
+	private int mTitlesTextColorUnselected = DEFAULT_TITLES_TEXT_COLOR;
+
 	// setTickCount only resets indices before a thumb has been pressed or a
 	// setThumbIndices() is called, to correspond with intended usage
 	private boolean mFirstSetTickCount = true;
@@ -83,6 +96,9 @@ public class RangeBar extends View {
 	private RangeBar.OnRangeBarChangeListener mListener;
 	private int mLeftIndex = 0;
 	private int mRightIndex = mTickCount - 1;
+
+	private Bar.TitlesConfig mTitlesConfig;
+	private String[] tickTitles;
 
 	// Constructors ////////////////////////////////////////////////////////////
 
@@ -128,6 +144,12 @@ public class RangeBar extends View {
 
 		bundle.putBoolean("FIRST_SET_TICK_COUNT", mFirstSetTickCount);
 
+		bundle.putBoolean("TITLES_BELOW_BAR", mTitlesBelowBar);
+		bundle.putInt("TITLES_MARGIN", mTitlesMarginPx);
+		bundle.putInt("TITLES_TEXT_SIZE", mTitlesTextSizePx);
+		bundle.putInt("TITLES_TEXT_COLOR_SELECTED", mTitlesTextColorSelected);
+		bundle.putInt("TITLES_TEXT_COLOR_UNSELECTED", mTitlesTextColorUnselected);
+
 		return bundle;
 	}
 
@@ -155,6 +177,12 @@ public class RangeBar extends View {
 			mLeftIndex = bundle.getInt("LEFT_INDEX");
 			mRightIndex = bundle.getInt("RIGHT_INDEX");
 			mFirstSetTickCount = bundle.getBoolean("FIRST_SET_TICK_COUNT");
+
+			mTitlesBelowBar = bundle.getBoolean("TITLES_BELOW_BAR");
+			mTitlesMarginPx = bundle.getInt("TITLES_MARGIN");
+			mTitlesTextSizePx = bundle.getInt("TITLES_TEXT_SIZE");
+			mTitlesTextColorSelected = bundle.getInt("TITLES_TEXT_COLOR_SELECTED");
+			mTitlesTextColorUnselected = bundle.getInt("TITLES_TEXT_COLOR_UNSELECTED");
 
 			setThumbIndices(mLeftIndex, mRightIndex);
 
@@ -215,7 +243,8 @@ public class RangeBar extends View {
 		// Create the underlying bar.
 		final float marginLeft = mLeftThumb.getHalfWidth();
 		final float barLength = w - 2 * marginLeft;
-		mBar = new Bar(ctx, marginLeft, yPos, barLength, mTickCount, mTickHeightDP, mBarWeight, mBarColor);
+		mTitlesConfig = getTitlesConfig();
+		mBar = new Bar(ctx, marginLeft, yPos, barLength, mTickCount, mTickHeightDP, mBarWeight, mBarColor, mTitlesConfig);
 
 		// Initialize thumbs to the desired indices
 		mLeftThumb.setX(marginLeft + (mLeftIndex / (float) (mTickCount - 1)) * barLength);
@@ -245,7 +274,7 @@ public class RangeBar extends View {
 
 		super.onDraw(canvas);
 
-		mBar.draw(canvas);
+		mBar.draw(canvas, mLeftIndex, mRightIndex);
 
 		mConnectingLine.draw(canvas, mLeftThumb, mRightThumb);
 
@@ -293,6 +322,13 @@ public class RangeBar extends View {
 	 */
 	public void setOnRangeBarChangeListener(RangeBar.OnRangeBarChangeListener listener) {
 		mListener = listener;
+	}
+
+	public void setTickTitles(String[] titles) {
+		int tickCount = titles.length;
+		tickTitles = titles;
+
+		setTickCount(tickCount);
 	}
 
 	/**
@@ -408,7 +444,7 @@ public class RangeBar extends View {
 	/**
 	 * Sets the normal thumb picture by taking in a reference ID to an image.
 	 *
-	 * @param thumbNormalID
+	 * @param thumbImageNormalID
 	 * 		Integer specifying the resource ID of the image to be drawn as the normal thumb.
 	 */
 	public void setThumbImageNormal(int thumbImageNormalID) {
@@ -419,7 +455,7 @@ public class RangeBar extends View {
 	/**
 	 * Sets the pressed thumb picture by taking in a reference ID to an image.
 	 *
-	 * @param pressedThumbID
+	 * @param thumbImagePressedID
 	 * 		Integer specifying the resource ID of the image to be drawn as the pressed thumb.
 	 */
 	public void setThumbImagePressed(int thumbImagePressedID) {
@@ -547,6 +583,11 @@ public class RangeBar extends View {
 			mThumbImagePressed = ta.getResourceId(R.styleable.RangeBar_thumbImagePressed, DEFAULT_THUMB_IMAGE_PRESSED);
 			mThumbColorNormal = ta.getColor(R.styleable.RangeBar_thumbColorNormal, DEFAULT_THUMB_COLOR_NORMAL);
 			mThumbColorPressed = ta.getColor(R.styleable.RangeBar_thumbColorPressed, DEFAULT_THUMB_COLOR_PRESSED);
+			mTitlesBelowBar = ta.getBoolean(R.styleable.RangeBar_titlesBelowBar, DEFAULT_TITLES_BELOW_BAR);
+			mTitlesTextSizePx = (int) ta.getDimension(R.styleable.RangeBar_titlesTextSize, DEFAULT_TITLES_TEXT_SIZE_PX);
+			mTitlesMarginPx = (int) ta.getDimension(R.styleable.RangeBar_titlesMargin, DEFAULT_TITLES_MARGIN_PX);
+			mTitlesTextColorSelected = ta.getColor(R.styleable.RangeBar_titlesTextColorSelected, DEFAULT_TITLES_TEXT_COLOR);
+			mTitlesTextColorUnselected = ta.getColor(R.styleable.RangeBar_titlesTextColorUnselected, DEFAULT_TITLES_TEXT_COLOR);
 		} finally {
 
 			ta.recycle();
@@ -555,19 +596,25 @@ public class RangeBar extends View {
 
 	/**
 	 * Creates a new mBar
-	 *
-	 * @param none
 	 */
 	private void createBar() {
 
-		mBar = new Bar(getContext(), getMarginLeft(), getYPos(), getBarLength(), mTickCount, mTickHeightDP, mBarWeight, mBarColor);
+		mTitlesConfig = getTitlesConfig();
+		mBar = new Bar(getContext(), getMarginLeft(), getYPos(), getBarLength(), mTickCount, mTickHeightDP, mBarWeight, mBarColor,
+				mTitlesConfig);
 		invalidate();
+	}
+
+	private Bar.TitlesConfig getTitlesConfig() {
+		Resources res = getResources();
+		DisplayMetrics displayMetrics = res.getDisplayMetrics();
+		int margin = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_PX, mTitlesMarginPx, displayMetrics);
+		int textSize = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_PX, mTitlesTextSizePx, displayMetrics);
+		return new Bar.TitlesConfig(tickTitles, mTitlesBelowBar, margin, textSize, mTitlesTextColorSelected, mTitlesTextColorUnselected);
 	}
 
 	/**
 	 * Creates a new ConnectingLine.
-	 *
-	 * @param none
 	 */
 	private void createConnectingLine() {
 
@@ -577,8 +624,6 @@ public class RangeBar extends View {
 
 	/**
 	 * Creates two new Thumbs.
-	 *
-	 * @param none
 	 */
 	private void createThumbs() {
 
@@ -601,8 +646,6 @@ public class RangeBar extends View {
 	/**
 	 * Get marginLeft in each of the public attribute methods.
 	 *
-	 * @param none
-	 *
 	 * @return float marginLeft
 	 */
 	private float getMarginLeft() {
@@ -612,8 +655,6 @@ public class RangeBar extends View {
 	/**
 	 * Get yPos in each of the public attribute methods.
 	 *
-	 * @param none
-	 *
 	 * @return float yPos
 	 */
 	private float getYPos() {
@@ -622,8 +663,6 @@ public class RangeBar extends View {
 
 	/**
 	 * Get barLength in each of the public attribute methods.
-	 *
-	 * @param none
 	 *
 	 * @return float barLength
 	 */
@@ -829,8 +868,8 @@ public class RangeBar extends View {
 	 * A callback that notifies clients when the RangeBar has changed. The listener will only be called when either thumb's index has changed -
 	 * not for every movement of the thumb.
 	 */
-	public static interface OnRangeBarChangeListener {
+	public interface OnRangeBarChangeListener {
 
-		public void onIndexChangeListener(RangeBar rangeBar, int leftThumbIndex, int rightThumbIndex);
+		void onIndexChangeListener(RangeBar rangeBar, int leftThumbIndex, int rightThumbIndex);
 	}
 }

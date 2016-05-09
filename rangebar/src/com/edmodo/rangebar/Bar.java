@@ -26,6 +26,7 @@ class Bar {
 	// Member Variables ////////////////////////////////////////////////////////
 
 	private final Paint mPaint;
+	private final Paint mTitlesPaint;
 
 	// Left-coordinate of the horizontal bar.
 	private final float mLeftX;
@@ -34,13 +35,22 @@ class Bar {
 
 	private int mNumSegments;
 	private float mTickDistance;
+	private final TitlesConfig mTitlesConfig; // tick titles underneath/above the bar, optional
 	private final float mTickHeight;
 	private final float mTickStartY;
 	private final float mTickEndY;
+	private int mSelectedIndexStart;
+	private int mSelectedIndexEnd;
 
 	// Constructor /////////////////////////////////////////////////////////////
 
-	Bar(Context ctx, float x, float y, float length, int tickCount, float tickHeightDP, float BarWeight, int BarColor) {
+	Bar(Context ctx, float x, float y, float length, int tickCount, float tickHeightDP, float BarWeight, int BarColor, TitlesConfig
+			titlesConfig) {
+
+		mTitlesConfig = titlesConfig;
+		if (mTitlesConfig != null && mTitlesConfig.titles != null && tickCount != titlesConfig.titles.length) {
+			throw new IllegalArgumentException("Titles count should match ticks count!");
+		}
 
 		mLeftX = x;
 		mRightX = x + length;
@@ -52,11 +62,18 @@ class Bar {
 		mTickStartY = mY - mTickHeight / 2f;
 		mTickEndY = mY + mTickHeight / 2f;
 
-		// Initialize the paint.
+		// Initialize the paints.
 		mPaint = new Paint();
 		mPaint.setColor(BarColor);
 		mPaint.setStrokeWidth(BarWeight);
 		mPaint.setAntiAlias(true);
+		if (mTitlesConfig != null) {
+			mTitlesPaint = new Paint();
+			mTitlesPaint.setTextAlign(Paint.Align.CENTER);
+			mTitlesPaint.setTextSize(mTitlesConfig.textSize);
+		} else {
+			mTitlesPaint = null;
+		}
 	}
 
 	// Package-Private Methods /////////////////////////////////////////////////
@@ -67,10 +84,12 @@ class Bar {
 	 * @param canvas
 	 * 		Canvas to draw on; should be the Canvas passed into {#link View#onDraw()}
 	 */
-	void draw(Canvas canvas) {
+	void draw(Canvas canvas, int selectedIndexStart, int selectedIndexEnd) {
 
 		canvas.drawLine(mLeftX, mY, mRightX, mY, mPaint);
 
+		mSelectedIndexStart = selectedIndexStart;
+		mSelectedIndexEnd = selectedIndexEnd;
 		drawTicks(canvas);
 	}
 
@@ -94,9 +113,6 @@ class Bar {
 
 	/**
 	 * Gets the x-coordinate of the nearest tick to the given x-coordinate.
-	 *
-	 * @param x
-	 * 		the x-coordinate to find the nearest tick for
 	 *
 	 * @return the x-coordinate of the nearest tick
 	 */
@@ -152,13 +168,47 @@ class Bar {
 		for (int i = 0; i < mNumSegments; i++) {
 			final float x = i * mTickDistance + mLeftX;
 			canvas.drawLine(x, mTickStartY, x, mTickEndY, mPaint);
+
+			// draw tick titles (optional)
+			drawTickTitle(canvas, i, x);
 		}
-		// Draw final tick. We draw the final tick outside the loop to avoid any
-		// rounding discrepancies.
+
+		// Draw final tick. We draw the final tick outside the loop to avoid any rounding discrepancies.
 		canvas.drawLine(mRightX, mTickStartY, mRightX, mTickEndY, mPaint);
+		// draw tick title (optional)
+		drawTickTitle(canvas, mNumSegments, mRightX);
+	}
+
+	private void drawTickTitle(Canvas canvas, int tickIndex, float x) {
+		if (mTitlesConfig != null && mTitlesConfig.titles != null) {
+			int margin = mTitlesConfig.below ? mTitlesConfig.margin : -mTitlesConfig.margin;
+			float y = mY + margin;
+			boolean selected = tickIndex >= mSelectedIndexStart && tickIndex <= mSelectedIndexEnd;
+			int titleColor = selected ? mTitlesConfig.textColorSelected : mTitlesConfig.textColorUnselected;
+			mTitlesPaint.setColor(titleColor);
+			canvas.drawText(mTitlesConfig.titles[tickIndex], x, y, mTitlesPaint);
+		}
 	}
 
 	public float getTickDistance() {
 		return mTickDistance;
+	}
+
+	public static final class TitlesConfig {
+		public final String[] titles;
+		public final boolean below; // if true - titles are drawn below the bar, otherwise above
+		public final int margin; // margin from bar
+		public final float textSize;
+		public final int textColorSelected;
+		public final int textColorUnselected;
+
+		public TitlesConfig(String[] titles, boolean below, int margin, float textSize, int textColorSelected, int textColorUnselected) {
+			this.titles = titles;
+			this.below = below;
+			this.margin = margin;
+			this.textSize = textSize;
+			this.textColorSelected = textColorSelected;
+			this.textColorUnselected = textColorUnselected;
+		}
 	}
 }
